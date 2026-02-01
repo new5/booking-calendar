@@ -1,6 +1,174 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Upload, ChevronDown, ChevronUp, AlertCircle, ChevronLeft, ChevronRight, Calendar as CalendarIcon, RefreshCw, Download, ArrowLeftRight, ArrowDownUp, Plus, X, Clock, AlertTriangle } from 'lucide-react';
 
+// --- 前略：Icons, DateUtils, 各コンポーネント定義はそのまま ---
+
+// ↓ 1. 必要なimportを追加
+import { db } from './firebase'; 
+import { doc, onSnapshot, setDoc } from "firebase/firestore";
+
+// App Container
+export default function App() {
+    const [data, setData] = useState([]);
+    const [rooms, setRooms] = useState([]);
+    const [activeReservations, setActiveReservations] = useState([]);
+    const [cancelledReservations, setCancelledReservations] = useState([]);
+    const [modifiedReservations, setModifiedReservations] = useState([]);
+    const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+    const [generatedAt, setGeneratedAt] = useState(null);
+    const [isSaving, setIsSaving] = useState(false); // 保存中フラグ
+
+    // データ処理（表示用ステートの更新のみ行う）
+    const processData = (rawData, timestamp) => {
+        if (timestamp) setGeneratedAt(new Date(timestamp));
+        
+        const uniqueMap = new Map();
+        rawData.forEach(item => {
+            const resNo = item['予約番号'];
+            const roomType = item['部屋タイプ名称'];
+            const checkIn = item['チェックイン日'];
+            let key = (resNo && roomType) ? `${resNo}_${roomType}` : `${item['宿泊者氏名']}-${checkIn}-${roomType}`;
+            uniqueMap.set(key, item);
+        });
+        const validData = Array.from(uniqueMap.values());
+        const uniqueRooms = Array.from(new Set(validData.map(r => r['部屋タイプ名称']))).filter(Boolean).sort();
+        const today = DateUtils.startOfDay(new Date());
+        
+        const active = validData.filter(r => r['予約区分'] !== 'キャンセル');
+        
+        const cancelledMap = new Map();
+        validData.filter(r => r['予約区分'] === 'キャンセル').forEach(r => {
+            const checkInDate = DateUtils.parseDate(r['チェックイン日']);
+            if (checkInDate >= today) {
+                const key = r['予約番号'] ? `${r['予約番号']}_${r['部屋タイプ名称']}` : `${r['宿泊者氏名']}_${r['チェックイン日']}_${r['部屋タイプ名称']}`;
+                if (!cancelledMap.has(key)) cancelledMap.set(key, r);
+            }
+        });
+        const cancelled = Array.from(cancelledMap.values()).sort((a, b) => DateUtils.parseDate(a['チェックイン日']) - DateUtils.parseDate(b['チェックイン日']));
+
+        const modifiedMap = new Map();
+        validData.filter(r => r['予約区分'] === '変更').forEach(r => {
+            const checkInDate = DateUtils.parseDate(r['チェックイン日']);
+            if (checkInDate >= today) {
+                const key = r['予約番号'] ? `${r['予約番号']}_${r['部屋タイプ名称']}` : `${r['宿泊者氏名']}_${r['チェックイン日']}_${r['部屋タイプ名称']}`;
+                if (!modifiedMap.has(key)) modifiedMap.set(key, r);
+            }
+        });
+        const modified = Array.from(modifiedMap.values()).sort((a, b) => DateUtils.parseDate(a['チェックイン日']) - DateUtils.parseDate(b['チェックイン日']));
+
+        setData(validData);
+        setRooms(uniqueRooms);
+        setActiveReservations(active);
+        setCancelledReservations(cancelled);
+        setModifiedReservations(modified);
+    };
+
+    // ↓ 2. Firebaseへの保存関数
+    const saveToFirebase = async (newData) => {
+        setIsSaving(true);
+        try {
+            const now = new Date().toISOString();
+            // 'calendar' というコレクションの 'latest' というドキュメントに保存
+            await setDoc(doc(db, "calendar", "latest"), {
+                reservations: newData,
+                updatedAt: now
+            });
+        } catch (e) {
+            console.error("Firebase save error:", e);
+            alert("クラウドへの保存に失敗しました。");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // ↓ 3. Firebaseのリアルタイム同期（アプリ起動時に自動でつながる）
+    useEffect(() => {
+        // 'calendar' コレクションの 'latest' ドキュメントを監視
+        const unsub = onSnapshot(doc(db, "calendar", "latest"), (doc) => {
+            if (doc.exists()) {
+                const remoteData = doc.data();
+                if (remoteData.reservations) {
+                    processData(remoteData.reservations, remoteData.updatedAt);
+                }
+            } else {
+                console.log("No data found in cloud");
+            }
+        });
+        return () => unsub(); // クリーンアップ
+    }, []);
+
+    // CSVアップロード時 -> Firebaseへ保存
+    const handleDataLoaded = (rawData) => {
+        saveToFirebase(rawData);
+    };
+
+    // 手動追加時 -> Firebaseへ保存
+    const handleAddManualReservation = (newRes) => {
+        const formattedRes = {
+            '予約区分': '予約',
+            '部屋タイプ名称': newRes.room,
+            '宿泊者氏名': newRes.guestName,
+            'チェックイン日': DateUtils.formatDate(new Date(newRes.checkIn), 'yyyy/MM/dd'),
+            'チェックアウト日': DateUtils.formatDate(new Date(newRes.checkOut), 'yyyy/MM/dd'),
+            '予約サイト名称': '手動追加',
+            '予約番号': `MANUAL_${Date.now()}`
+        };
+        const updatedData = [...data, formattedRes];
+        saveToFirebase(updatedData);
+    };
+
+    // データクリア -> Firebaseも空にする
+    const handleClearData = async () => {
+        if (window.confirm("共有されているデータを全て削除してよろしいですか？")) {
+            await saveToFirebase([]);
+            setData([]);
+            setRooms([]);
+        }
+    };
+
+    return (
+        <div className="min-h-screen bg-gray-100 p-4 md:p-8 font-sans text-gray-800">
+            <div className="max-w-7xl mx-auto space-y-6">
+                <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                            <Icons.Calendar className="w-8 h-8 text-blue-600" />
+                            宿泊予約管理カレンダー
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">クラウド同期中</span>
+                        </h1>
+                        <p className="text-sm text-gray-500">データはクラウドに保存され、全員に共有されます</p>
+                        {generatedAt && (
+                            <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+                                <Icons.Clock className="w-4 h-4" />
+                                <p>最終更新: {generatedAt.toLocaleString()}</p>
+                            </div>
+                        )}
+                    </div>
+                </header>
+
+                {data.length === 0 ? (
+                    <FileUploader onDataLoaded={handleDataLoaded} />
+                ) : (
+                    <>
+                        <div className="flex justify-end gap-2 flex-wrap">
+                             <div className="flex items-center text-xs text-gray-400 mr-2">
+                                {isSaving ? "保存中..." : "同期済み"}
+                             </div>
+                             <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-1 text-sm text-white bg-green-600 hover:bg-green-700 px-3 py-2 rounded shadow-sm transition-colors"><Icons.Plus className="w-4 h-4" />予約を手動追加</button>
+                             <button onClick={() => downloadStaticHtml(activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAt)} className="flex items-center gap-1 text-sm text-white bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded shadow-sm transition-colors"><Icons.Download className="w-4 h-4" />静的HTMLをダウンロード</button>
+                            <button onClick={handleClearData} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 bg-white px-3 py-2 rounded border shadow-sm transition-colors"><Icons.RefreshCw className="w-3 h-3" />全データ削除</button>
+                        </div>
+                        <CancellationList cancellations={cancelledReservations} />
+                        <ModifiedList modifications={modifiedReservations} />
+                        <div className="h-[600px]"><CalendarView reservations={activeReservations} rooms={rooms} /></div>
+                        <ManualBookingModal isOpen={isManualModalOpen} onClose={() => setIsManualModalOpen(false)} rooms={rooms} onAdd={handleAddManualReservation} />
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
 // Icons object definition
 const Icons = {
     Upload,
@@ -314,35 +482,27 @@ const downloadStaticHtml = (activeReservations, cancelledReservations, modifiedR
                 const k = DateUtils.formatDate(day, 'yyyy-MM-dd');
                 const d = availabilityMap[room]?.[k];
                 const isCurrentMonth = DateUtils.isSameMonth(day, currentMonth);
-                
-                // 修正: ベースのクラス定義（色は含まない）
-                const baseClass = "h-full w-full text-[10px] p-1 border-r border-b border-gray-100 relative overflow-hidden flex flex-col justify-center";
-                // 空セル用の背景色
-                const bgEmpty = isCurrentMonth ? 'bg-white' : 'bg-gray-100';
-
-                // データがない場合は空セル（背景色適用）
-                if (!d) return <div className={\`\${baseClass} \${bgEmpty}\`}></div>;
-
+                const bgBase = isCurrentMonth ? 'bg-white' : 'bg-gray-100';
+                if (!d) return <div className={\`h-full w-full border-r border-b border-gray-100 \${bgBase}\`}></div>;
+                const cls = \`h-full w-full text-[10px] p-1 border-r border-b border-gray-100 relative overflow-hidden flex flex-col justify-center \${bgBase} \`;
                 if (d.isTurnover) {
-                    return <div className={\`\${baseClass} border-r-2 border-r-gray-400 group\`} style={{background: 'linear-gradient(135deg, #fecaca 50%, #bbf7d0 50%)'}}>
+                    return <div className={\`\${cls} border-r-2 border-r-gray-400 group\`} style={{background: 'linear-gradient(135deg, #fecaca 50%, #bbf7d0 50%)'}}>
                         <div className="absolute inset-0 p-0.5 flex flex-col justify-between pointer-events-none">
                             <div className="text-[8px] leading-none text-red-900 truncate w-[90%] text-left font-bold" style={{textShadow:'0 0 2px rgba(255,255,255,0.8)'}}>OUT:{d.prevGuest||d.guest}</div>
                             <div className="text-[8px] leading-none text-green-900 truncate w-[90%] text-right self-end font-bold" style={{textShadow:'0 0 2px rgba(255,255,255,0.8)'}}>IN:{d.nextGuest||d.guest}</div>
                         </div>
                     </div>;
                 } else if (d.type === 'start') {
-                    return <div className={\`\${baseClass} bg-green-100 text-green-800 rounded-l-md ml-1 border-l-4 border-l-green-500\`}>
+                    return <div className={\`\${cls} bg-green-100 text-green-800 rounded-l-md ml-1 border-l-4 border-l-green-500\`}>
                         <span className="font-bold truncate">{d.guest}</span>
                         <span className="text-[9px]">IN</span>
                     </div>;
                 } else if (d.type === 'end') {
-                    return <div className={\`\${baseClass} bg-red-100 text-red-800 rounded-r-md mr-1 border-r-4 border-r-red-400\`}>
+                    return <div className={\`\${cls} bg-red-100 text-red-800 rounded-r-md mr-1 border-r-4 border-r-red-400\`}>
                         <span className="text-[9px] text-right">OUT</span>
                     </div>;
                 }
-                
-                // STAY (bgEmptyを混ぜないように修正)
-                return <div className={\`\${baseClass} bg-blue-100 text-blue-800\`}>
+                return <div className={\`\${cls} bg-blue-100 text-blue-800\`}>
                     <div className="w-full h-1 bg-blue-300 rounded-full opacity-50"></div>
                 </div>;
             };
