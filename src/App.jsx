@@ -358,6 +358,7 @@ export default function App() {
     const handleLogin = () => { setIsAuthenticated(true); localStorage.setItem('calendar_auth', 'true'); };
     const handleLogout = () => { setIsAuthenticated(false); localStorage.removeItem('calendar_auth'); setData([]); };
 
+// --- App Container 内の processData 部分を修正 ---
     const processData = (rawData, timestamp) => {
         if (timestamp) setGeneratedAt(new Date(timestamp));
         const uniqueMap = new Map();
@@ -368,13 +369,35 @@ export default function App() {
             let key = (resNo && roomType) ? `${resNo}_${roomType}` : `${item['宿泊者氏名']}-${checkIn}-${roomType}`;
             uniqueMap.set(key, item);
         });
+        
         const validData = Array.from(uniqueMap.values());
         const uniqueRooms = Array.from(new Set(validData.map(r => r['部屋タイプ名称']))).filter(Boolean).sort();
         const today = DateUtils.startOfDay(new Date());
+        
+        // 日付順にソートするためのヘルパー
+        const sortByDate = (a, b) => {
+            const dateA = DateUtils.parseDate(a['チェックイン日']).getTime();
+            const dateB = DateUtils.parseDate(b['チェックイン日']).getTime();
+            return dateA - dateB; // 昇順（近い順）
+        };
+
         const active = validData.filter(r => r['予約区分'] !== 'キャンセル');
-        const cancelled = validData.filter(r => r['予約区分'] === 'キャンセル' && DateUtils.parseDate(r['チェックイン日']) >= today);
-        const modified = validData.filter(r => r['予約区分'] === '変更' && DateUtils.parseDate(r['チェックイン日']) >= today);
-        setData(validData); setRooms(uniqueRooms); setActiveReservations(active); setCancelledReservations(cancelled); setModifiedReservations(modified);
+        
+        // キャンセルリスト：今日以降のものを抽出し、日付の近い順にソート
+        const cancelled = validData
+            .filter(r => r['予約区分'] === 'キャンセル' && DateUtils.parseDate(r['チェックイン日']) >= today)
+            .sort(sortByDate);
+            
+        // 変更リスト：今日以降のものを抽出し、日付の近い順にソート
+        const modified = validData
+            .filter(r => r['予約区分'] === '変更' && DateUtils.parseDate(r['チェックイン日']) >= today)
+            .sort(sortByDate);
+
+        setData(validData);
+        setRooms(uniqueRooms);
+        setActiveReservations(active);
+        setCancelledReservations(cancelled);
+        setModifiedReservations(modified);
     };
 
     const saveToFirebase = async (newData) => {
