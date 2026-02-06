@@ -18,27 +18,41 @@ A React + Vite booking/reservation calendar application with real-time Firebase 
 3. **Export**: Generates standalone HTML with embedded React app + JSON data bundle
 
 ### Single-File Architecture
-**[src/App.jsx](src/App.jsx)** (1127 lines) contains:
+**[src/App.jsx](src/App.jsx)** (456 lines) contains all application logic:
 - `DateUtils`: Date parsing/formatting with Japanese locale support (年月日)
 - `Icons`: Icon definitions from lucide-react
-- `CalendarView`: Grid/vertical calendar with smart scrolling to today/month bounds
-- `CancellationList` / `ModifiedList`: Collapsible alert panels
-- `ReservationModal`: Edit existing reservations inline
-- `NewReservationModal`: Add new bookings
-- `App` component: Main orchestrator with CSV upload, view toggles, real-time sync
+- `parseCSV`: CSV parser with quoted field handling and UTF-8/Shift_JIS encoding support
+- `downloadStaticHtml`: Generates standalone HTML export with embedded React + JSON data
+- `LoginScreen`: Passcode-protected authentication (reads `VITE_APP_PASSCODE` from .env)
+- `ManualBookingModal`: Form to add new reservations manually
+- `FileUploader`: Drag-drop CSV import with multi-file support
+- `CancellationList` / `ModifiedList`: Collapsible alert panels for flagged reservations
+- `CalendarView`: Grid/vertical calendar with smart scrolling, date ID targeting, availability rendering
+- `App` component: Main orchestrator managing authentication, Firebase sync, data processing, and UI state
 
 ### Data Model
-Reservations are Firestore documents with structure:
+Reservations are stored in Firestore at `calendar/latest` with structure:
+```json
+{
+  "reservations": [
+    {
+      "予約区分": "キャンセル|変更|" (empty for normal),
+      "予約番号": "unique ID",
+      "チェックイン日": "YYYY/MM/DD or YYYY-MM-DD",
+      "チェックアウト日": "YYYY/MM/DD or YYYY-MM-DD",
+      "宿泊者氏名": "guest name",
+      "部屋タイプ名称": "room type",
+      "予約サイト名称": "booking site",
+      "備考1": "notes 1",
+      "備考2": "notes 2"
+    }
+  ],
+  "updatedAt": "ISO timestamp"
+}
 ```
-チェックイン日 (check-in)
-チェックアウト日 (check-out)
-宿泊者氏名 (guest name)
-部屋タイプ名称 (room type)
-予約サイト名称 (booking site)
-備考1, 備考2 (notes)
-```
+**Deduplication**: Uses `予約番号_部屋タイプ名称` as composite key; falls back to `氏名-チェックイン日-部屋タイプ` if number missing. Latest entry wins.
 
-Room types/sites parsed from CSV headers; availability calculated as date ranges.
+**Date filtering**: Active/cancelled/modified lists filtered by `予約区分` field and checked-in date >= today.
 
 ## Development Workflows
 
@@ -62,6 +76,13 @@ npm run preview          # Preview production build locally
 - Export feature generates **standalone HTML** with inline React + CSS (for sharing)
 
 ## Project Conventions
+
+### Authentication
+- **Method**: Passcode-based (numeric, 4+ digits)
+- **Config**: `VITE_APP_PASSCODE` environment variable in `.env` (defaults to "0000" if missing)
+- **Persistence**: Stored in `localStorage['calendar_auth']` as 'true'/'false'
+- **Login**: `LoginScreen` component intercepts until `handleLogin()` is called
+- **Logout**: Clears localStorage and resets all UI state (called manually if needed)
 
 ### Date Formatting
 - **Internal**: YYYY-MM-DD (ISO format)
@@ -101,12 +122,22 @@ npm run preview          # Preview production build locally
 ## Critical Integration Points
 
 ### Firebase Real-Time Sync
-When modifying reservation data, use `setDoc(doc(db, "reservations", id), data)` to persist changes. The `onSnapshot` listener automatically re-renders the UI.
+- Connection only established after `isAuthenticated = true`
+- Uses `onSnapshot()` on `doc(db, "calendar", "latest")` to listen for changes
+- Writes to Firestore with `setDoc(doc(db, "calendar", "latest"), { reservations: data, updatedAt: timestamp })`
+- Data processing: `processData()` deduplicates, filters by status, and updates React state atomically
 
-### CSV Export Data Format
+### Data Deduplication Algorithm
+1. Create `Map` with composite keys: `{予約番号}_{部屋タイプ名称}`
+2. If no 予約番号, fall back to: `{氏名}-{チェックイン日}-{部屋タイプ名称}`
+3. Later entries override earlier ones in the map (latest wins)
+4. Extract filtered arrays for active/cancelled/modified by `予約区分` field
+
+### CSV Import Data Format
 The static HTML export includes embedded JSON with `activeReservations`, `cancelledReservations`, `modifiedReservations`, and room list. When modifying export logic, ensure JSON stringification is valid.
 
 ### Responsive Calendar Layout
 - Horizontal (default): Uses sticky left column for room names; horizontal scroll by date
 - Vertical: Full-width day rows; vertical scroll by room
 - Always check scroll container ref (`scrollContainerRef`) in both orientations
+- Date targeting: `id={`date-${DateUtils.formatDate(d,'yyyy-MM-dd')}`}` for smooth scroll anchoring

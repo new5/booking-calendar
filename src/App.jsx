@@ -3,17 +3,13 @@ import { Upload, ChevronDown, ChevronUp, AlertCircle, ChevronLeft, ChevronRight,
 import { db } from './firebase'; 
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
-// ★★★ 環境変数からパスコードを読み込む ★★★
-// .envファイルがない場合や読み込めない場合のために、デフォルト値("0000")も設定しておきます
 const APP_PASSCODE = import.meta.env.VITE_APP_PASSCODE || "0000";
 
-// Icons object definition
 const Icons = {
     Upload, ChevronDown, ChevronUp, AlertCircle, ChevronLeft, ChevronRight, Calendar: CalendarIcon,
     RefreshCw, Download, ArrowLeftRight, ArrowDownUp, Plus, X, Clock, AlertTriangle, Lock, LogIn
 };
 
-// --- Date Helpers ---
 const DateUtils = {
     addDays: (date, days) => { const r = new Date(date); r.setDate(r.getDate() + days); return r; },
     startOfDay: (date) => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; },
@@ -46,7 +42,6 @@ const DateUtils = {
     }
 };
 
-// --- CSV Parser Helper ---
 const parseCSV = (text) => {
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
     const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
@@ -74,13 +69,10 @@ const parseCSV = (text) => {
     return result;
 };
 
-// --- Static HTML Generator ---
 const downloadStaticHtml = (activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAtDate) => {
-    /* HTML生成機能は長いので省略せずそのまま動作するように実装 */
     const generatedAtStr = generatedAtDate ? generatedAtDate.toLocaleString() : new Date().toLocaleString();
     const embeddedData = JSON.stringify({ activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAt: generatedAtStr });
     const htmlContent = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reservation Calendar</title><script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script><script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><script src="https://cdn.tailwindcss.com"></script><style>body{font-family:"Helvetica Neue",Arial,sans-serif}</style></head><body class="bg-gray-50"><div id="root"></div><script id="calendar-data" type="application/json">${embeddedData}</script><script type="text/babel">
-        /* 静的HTML内の簡易表示ロジックは容量削減のため簡略化 */
         const { useState } = React;
         const App = () => {
             const data = JSON.parse(document.getElementById('calendar-data').textContent);
@@ -99,51 +91,29 @@ const downloadStaticHtml = (activeReservations, cancelledReservations, modifiedR
     URL.revokeObjectURL(url);
 };
 
-// --- Login Screen Component ---
 const LoginScreen = ({ onLogin }) => {
     const [input, setInput] = useState('');
     const [error, setError] = useState(false);
-
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (input === APP_PASSCODE) {
-            onLogin();
-        } else {
-            setError(true);
-            setInput('');
-        }
+        if (input === APP_PASSCODE) onLogin();
+        else { setError(true); setInput(''); }
     };
-
     return (
         <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
             <div className="bg-white p-8 rounded-xl shadow-lg max-w-sm w-full">
-                <div className="flex justify-center mb-6">
-                    <div className="p-4 bg-blue-100 rounded-full">
-                        <Icons.Lock className="w-8 h-8 text-blue-600" />
-                    </div>
-                </div>
+                <div className="flex justify-center mb-6"><div className="p-4 bg-blue-100 rounded-full"><Icons.Lock className="w-8 h-8 text-blue-600" /></div></div>
                 <h2 className="text-xl font-bold text-center mb-6 text-gray-800">パスコードを入力</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <input
-                        type="password" 
-                        inputMode="numeric"
-                        value={input}
-                        onChange={(e) => { setInput(e.target.value); setError(false); }}
-                        className="w-full text-center text-2xl tracking-widest p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-                        placeholder="••••"
-                        autoFocus
-                    />
+                    <input type="password" inputMode="numeric" value={input} onChange={(e) => { setInput(e.target.value); setError(false); }} className="w-full text-center text-2xl tracking-widest p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition" placeholder="••••" autoFocus />
                     {error && <p className="text-red-500 text-sm text-center font-bold">パスコードが違います</p>}
-                    <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2">
-                        <Icons.LogIn className="w-5 h-5" /> 解除
-                    </button>
+                    <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2"><Icons.LogIn className="w-5 h-5" /> 解除</button>
                 </form>
             </div>
         </div>
     );
 };
 
-// --- Other Components (Simplified for brevity, same logic as before) ---
 const ManualBookingModal = ({ isOpen, onClose, rooms, onAdd }) => {
     const [formData, setFormData] = useState({ room: '', guestName: '', checkIn: '', checkOut: '' });
     useEffect(() => { if (isOpen && rooms.length > 0) setFormData(prev => ({ ...prev, room: rooms[0] })); }, [isOpen, rooms]);
@@ -182,8 +152,7 @@ const FileUploader = ({ onDataLoaded }) => {
                     return p.filter(row => row['予約区分'] && row['チェックイン日']);
                 }));
                 const flatData = results.flat();
-                if(flatData.length === 0) alert("有効なデータなし");
-                else onDataLoaded(flatData);
+                if(flatData.length === 0) alert("有効なデータなし"); else onDataLoaded(flatData);
             } catch (e) { alert("読込エラー"); }
         };
         processFiles();
@@ -204,6 +173,7 @@ const CancellationList = ({ cancellations }) => {
         </div>
     );
 };
+
 const ModifiedList = ({ modifications }) => {
     const [isOpen, setIsOpen] = useState(false);
     if (!modifications || modifications.length === 0) return null;
@@ -237,16 +207,17 @@ const CalendarView = ({ reservations, rooms }) => {
     useEffect(() => {
         if (!scrollAction || !scrollContainerRef.current) return;
         const container = scrollContainerRef.current;
-        let targetId = scrollAction === 'today' ? `date-${DateUtils.formatDate(new Date(), 'yyyy-MM-dd')}` : null;
-        if(scrollAction === 'start') targetId = `date-${DateUtils.formatDate(DateUtils.startOfMonth(currentMonth), 'yyyy-MM-dd')}`;
-        if(scrollAction === 'end') targetId = `date-${DateUtils.formatDate(DateUtils.endOfMonth(currentMonth), 'yyyy-MM-dd')}`;
+        const prefix = isVertical ? 'v-' : 'h-'; // ID衝突回避のためのプレフィックス
+        let targetId = scrollAction === 'today' ? `${prefix}date-${DateUtils.formatDate(new Date(), 'yyyy-MM-dd')}` : null;
+        if(scrollAction === 'start') targetId = `${prefix}date-${DateUtils.formatDate(DateUtils.startOfMonth(currentMonth), 'yyyy-MM-dd')}`;
+        if(scrollAction === 'end') targetId = `${prefix}date-${DateUtils.formatDate(DateUtils.endOfMonth(currentMonth), 'yyyy-MM-dd')}`;
         
         const targetEl = document.getElementById(targetId);
         if (targetEl) {
             const offset = isVertical ? targetEl.offsetTop - container.offsetTop : targetEl.offsetLeft - 128;
             container.scrollTo({ [isVertical?'top':'left']: offset, behavior: 'smooth' });
         } else if (scrollAction === 'today') {
-            const startId = `date-${DateUtils.formatDate(DateUtils.startOfMonth(currentMonth), 'yyyy-MM-dd')}`;
+            const startId = `${prefix}date-${DateUtils.formatDate(DateUtils.startOfMonth(currentMonth), 'yyyy-MM-dd')}`;
             const sEl = document.getElementById(startId);
             if(sEl) container.scrollTo({ [isVertical?'top':'left']: isVertical ? sEl.offsetTop : sEl.offsetLeft - 128, behavior: 'smooth' });
         }
@@ -283,7 +254,6 @@ const CalendarView = ({ reservations, rooms }) => {
         const isCurrent = DateUtils.isSameMonth(day, currentMonth);
         const baseClass = "h-full w-full text-[10px] p-1 border-r border-b border-gray-100 relative overflow-hidden flex flex-col justify-center";
         const bgEmpty = isCurrent ? 'bg-white' : 'bg-gray-100';
-
         if (!d) return <div className={`${baseClass} ${bgEmpty}`}></div>;
         if (d.isTurnover) return <div className={`${baseClass} border-r-gray-400`} style={{background: 'linear-gradient(135deg, #fecaca 50%, #bbf7d0 50%)'}}><div className="text-[8px] font-bold text-red-900">OUT:{d.prevGuest||d.guest}</div><div className="text-[8px] font-bold text-green-900 text-right">IN:{d.nextGuest||d.guest}</div></div>;
         if (d.type === 'start') return <div className={`${baseClass} bg-green-100 border-l-4 border-l-green-500 rounded-l`}><span className="font-bold truncate">{d.guest}</span><span className="text-[8px]">IN</span></div>;
@@ -301,12 +271,12 @@ const CalendarView = ({ reservations, rooms }) => {
                 {isVertical ? (
                     <div className="min-w-fit">
                         <div className="flex sticky top-0 z-40 bg-white border-b"><div className="w-20 p-2 bg-gray-100 border-r text-center text-sm sticky left-0 z-50">日付</div>{rooms.map(r=><div key={r} className="flex-1 min-w-[120px] p-2 text-sm text-center border-r bg-gray-50">{r}</div>)}</div>
-                        {calendarDays.map((d,i)=><div key={i} id={`date-${DateUtils.formatDate(d,'yyyy-MM-dd')}`} className="flex h-14 border-b"><div className={`w-20 p-1 text-center border-r sticky left-0 z-20 flex flex-col justify-center ${DateUtils.isSameDay(d,new Date())?'bg-blue-50 font-bold':(DateUtils.isSameMonth(d,currentMonth)?'bg-white':'bg-gray-200')}`}><div className="text-xs">{DateUtils.formatDate(d,'E')}</div><div>{DateUtils.formatDate(d,'M/d')}</div></div>{rooms.map(r=><div key={r} className="flex-1 min-w-[120px] border-r">{renderCell(r,d)}</div>)}</div>)}
+                        {calendarDays.map((d,i)=><div key={i} id={`v-date-${DateUtils.formatDate(d,'yyyy-MM-dd')}`} className="flex h-14 border-b"><div className={`w-20 p-1 text-center border-r sticky left-0 z-20 flex flex-col justify-center ${DateUtils.isSameDay(d,new Date())?'bg-blue-50 font-bold':(DateUtils.isSameMonth(d,currentMonth)?'bg-white':'bg-gray-200')}`}><div className="text-xs">{DateUtils.formatDate(d,'E')}</div><div>{DateUtils.formatDate(d,'M/d')}</div></div>{rooms.map(r=><div key={r} className="flex-1 min-w-[120px] border-r">{renderCell(r,d)}</div>)}</div>)}
                     </div>
                 ) : (
                     <div className="min-w-fit">
-                        <div className="flex sticky top-0 z-40 bg-white border-b"><div className="w-32 p-2 bg-gray-100 border-r text-center text-sm sticky left-0 z-50">部屋</div>{calendarDays.map(d=><div key={d} id={`date-${DateUtils.formatDate(d,'yyyy-MM-dd')}`} className={`flex-1 min-w-[60px] p-1 text-center border-r text-sm ${DateUtils.isSameDay(d,new Date())?'bg-blue-50 font-bold':(DateUtils.isSameMonth(d,currentMonth)?'bg-white':'bg-gray-200')}`}>{DateUtils.formatDate(d,'d')}</div>)}</div>
-                        {rooms.map(r=><div key={r} className="flex h-14 border-b"><div className="w-32 p-2 text-sm font-medium border-r bg-white sticky left-0 z-20 flex items-center shadow-sm">{r}</div>{calendarDays.map(d=><div key={d} className="flex-1 min-w-[60px]">{renderCell(r,d)}</div>)}</div>)}
+                        <div className="flex sticky top-0 z-40 bg-white border-b"><div className="w-32 p-2 bg-gray-100 border-r text-center text-sm sticky left-0 z-50">部屋</div>{calendarDays.map(d=><div key={DateUtils.formatDate(d,'yyyy-MM-dd')} id={`h-date-${DateUtils.formatDate(d,'yyyy-MM-dd')}`} className={`flex-1 min-w-[60px] p-1 text-center border-r text-sm ${DateUtils.isSameDay(d,new Date())?'bg-blue-50 font-bold':(DateUtils.isSameMonth(d,currentMonth)?'bg-white':'bg-gray-200')}`}>{DateUtils.formatDate(d,'d')}</div>)}</div>
+                        {rooms.map(r=><div key={r} className="flex h-14 border-b"><div className="w-32 p-2 text-sm font-medium border-r bg-white sticky left-0 z-20 flex items-center shadow-sm">{r}</div>{calendarDays.map(d=><div key={DateUtils.formatDate(d,'yyyy-MM-dd')} className="flex-1 min-w-[60px]">{renderCell(r,d)}</div>)}</div>)}
                     </div>
                 )}
             </div>
@@ -314,12 +284,8 @@ const CalendarView = ({ reservations, rooms }) => {
     );
 };
 
-// --- App Container ---
 export default function App() {
-    // 認証状態のステート
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    
-    // アプリのデータステート
     const [data, setData] = useState([]);
     const [rooms, setRooms] = useState([]);
     const [activeReservations, setActiveReservations] = useState([]);
@@ -329,28 +295,14 @@ export default function App() {
     const [generatedAt, setGeneratedAt] = useState(null);
     const [isSaving, setIsSaving] = useState(false);
 
-    // 初回起動時にローカルストレージをチェックして、認証済みか確認
     useEffect(() => {
         const auth = localStorage.getItem('calendar_auth');
-        if (auth === 'true') {
-            setIsAuthenticated(true);
-        }
+        if (auth === 'true') setIsAuthenticated(true);
     }, []);
 
-    // ログイン処理
-    const handleLogin = () => {
-        setIsAuthenticated(true);
-        localStorage.setItem('calendar_auth', 'true'); // 認証状態を保存
-    };
+    const handleLogin = () => { setIsAuthenticated(true); localStorage.setItem('calendar_auth', 'true'); };
+    const handleLogout = () => { setIsAuthenticated(false); localStorage.removeItem('calendar_auth'); setData([]); };
 
-    // ログアウト処理（必要であれば）
-    const handleLogout = () => {
-        setIsAuthenticated(false);
-        localStorage.removeItem('calendar_auth');
-        setData([]); // データも一旦クリアすると安全
-    };
-
-    // Firebaseロジック等はそのまま
     const processData = (rawData, timestamp) => {
         if (timestamp) setGeneratedAt(new Date(timestamp));
         const uniqueMap = new Map();
@@ -364,29 +316,20 @@ export default function App() {
         const validData = Array.from(uniqueMap.values());
         const uniqueRooms = Array.from(new Set(validData.map(r => r['部屋タイプ名称']))).filter(Boolean).sort();
         const today = DateUtils.startOfDay(new Date());
-        
         const active = validData.filter(r => r['予約区分'] !== 'キャンセル');
         const cancelled = validData.filter(r => r['予約区分'] === 'キャンセル' && DateUtils.parseDate(r['チェックイン日']) >= today);
         const modified = validData.filter(r => r['予約区分'] === '変更' && DateUtils.parseDate(r['チェックイン日']) >= today);
-
-        setData(validData);
-        setRooms(uniqueRooms);
-        setActiveReservations(active);
-        setCancelledReservations(cancelled);
-        setModifiedReservations(modified);
+        setData(validData); setRooms(uniqueRooms); setActiveReservations(active); setCancelledReservations(cancelled); setModifiedReservations(modified);
     };
 
     const saveToFirebase = async (newData) => {
         setIsSaving(true);
-        try {
-            await setDoc(doc(db, "calendar", "latest"), { reservations: newData, updatedAt: new Date().toISOString() });
-        } catch (e) { alert("保存失敗"); } finally { setIsSaving(false); }
+        try { await setDoc(doc(db, "calendar", "latest"), { reservations: newData, updatedAt: new Date().toISOString() }); }
+        catch (e) { alert("保存失敗"); } finally { setIsSaving(false); }
     };
 
-    // 認証済みの場合のみFirebase同期を開始
     useEffect(() => {
         if (!isAuthenticated) return;
-
         const unsub = onSnapshot(doc(db, "calendar", "latest"), (doc) => {
             if (doc.exists()) {
                 const remoteData = doc.data();
@@ -397,7 +340,6 @@ export default function App() {
     }, [isAuthenticated]);
 
     const handleDataLoaded = (rawData) => saveToFirebase(rawData);
-    
     const handleAddManualReservation = (newRes) => {
         const formattedRes = {
             '予約区分': '予約', '部屋タイプ名称': newRes.room, '宿泊者氏名': newRes.guestName,
@@ -407,17 +349,10 @@ export default function App() {
         };
         saveToFirebase([...data, formattedRes]);
     };
+    const handleClearData = async () => { if (window.confirm("全データ削除しますか？")) { await saveToFirebase([]); setData([]); setRooms([]); } };
 
-    const handleClearData = async () => {
-        if (window.confirm("全データ削除しますか？")) { await saveToFirebase([]); setData([]); setRooms([]); }
-    };
+    if (!isAuthenticated) return <LoginScreen onLogin={handleLogin} />;
 
-    // ★ 認証されていなければログイン画面を表示
-    if (!isAuthenticated) {
-        return <LoginScreen onLogin={handleLogin} />;
-    }
-
-    // ★ 認証されていればカレンダーアプリを表示
     return (
         <div className="min-h-screen bg-gray-100 p-4 md:p-8 font-sans text-gray-800">
             <div className="max-w-7xl mx-auto space-y-6">
