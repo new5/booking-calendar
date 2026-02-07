@@ -400,7 +400,7 @@ export default function App() {
                         </div>
                         <CancellationList cancellations={cancelledReservations} />
                         <ModifiedList modifications={modifiedReservations} />
-                        <div className="h-[600px]"><CalendarView reservations={activeReservations} rooms={rooms} /></div>
+                        <div className="h-[70vh]"><CalendarView reservations={activeReservations} rooms={rooms} /></div>
                         <ManualBookingModal isOpen={isManualModalOpen} onClose={() => setIsManualModalOpen(false)} rooms={rooms} onAdd={handleAddManualReservation} />
                     </>
                 )}
