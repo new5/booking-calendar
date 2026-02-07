@@ -3,6 +3,7 @@ import { Upload, ChevronDown, ChevronUp, AlertCircle, ChevronLeft, ChevronRight,
 import { db } from './firebase'; 
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 
+// ★★★ 環境変数からパスコードを読み込む ★★★
 const APP_PASSCODE = import.meta.env.VITE_APP_PASSCODE || "0000";
 
 const Icons = {
@@ -10,6 +11,7 @@ const Icons = {
     RefreshCw, Download, ArrowLeftRight, ArrowDownUp, Plus, X, Clock, AlertTriangle, Lock, LogIn
 };
 
+// --- Date Helpers ---
 const DateUtils = {
     addDays: (date, days) => { const r = new Date(date); r.setDate(r.getDate() + days); return r; },
     startOfDay: (date) => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; },
@@ -42,6 +44,7 @@ const DateUtils = {
     }
 };
 
+// --- CSV Parser Helper ---
 const parseCSV = (text) => {
     if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
     const lines = text.split(/\r\n|\n/).filter(line => line.trim() !== '');
@@ -69,6 +72,7 @@ const parseCSV = (text) => {
     return result;
 };
 
+// --- Static HTML Generator ---
 const downloadStaticHtml = (activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAtDate) => {
     const generatedAtStr = generatedAtDate ? generatedAtDate.toLocaleString() : new Date().toLocaleString();
     const embeddedData = JSON.stringify({ activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAt: generatedAtStr });
@@ -91,6 +95,7 @@ const downloadStaticHtml = (activeReservations, cancelledReservations, modifiedR
     URL.revokeObjectURL(url);
 };
 
+// --- Login Screen Component ---
 const LoginScreen = ({ onLogin }) => {
     const [input, setInput] = useState('');
     const [error, setError] = useState(false);
@@ -184,69 +189,14 @@ const ModifiedList = ({ modifications }) => {
     );
 };
 
-// --- 縦表示専用コンポーネント ---
-const VerticalView = ({ calendarDays, rooms, renderCell, currentMonth, scrollContainerRef }) => (
-    <div className="min-w-fit" key="vertical-root">
-        <div className="flex sticky top-0 z-40 bg-white border-b">
-            <div className="w-20 p-2 bg-gray-100 border-r text-center text-sm sticky left-0 z-50">日付</div>
-            {rooms.map(r => <div key={r} className="flex-1 min-w-[120px] p-2 text-sm text-center border-r bg-gray-50">{r}</div>)}
-        </div>
-        {calendarDays.map((d, i) => (
-            <div key={`v-row-${i}`} id={`v-date-${DateUtils.formatDate(d, 'yyyy-MM-dd')}`} className="flex h-14 border-b">
-                <div className={`w-20 p-1 text-center border-r sticky left-0 z-20 flex flex-col justify-center ${DateUtils.isSameDay(d, new Date()) ? 'bg-blue-50 font-bold' : (DateUtils.isSameMonth(d, currentMonth) ? 'bg-white' : 'bg-gray-200')}`}>
-                    <div className="text-xs">{DateUtils.formatDate(d, 'E')}</div>
-                    <div>{DateUtils.formatDate(d, 'M/d')}</div>
-                </div>
-                {rooms.map(r => <div key={`v-cell-${r}-${i}`} className="flex-1 min-w-[120px] border-r">{renderCell(r, d)}</div>)}
-            </div>
-        ))}
-    </div>
-);
-
-// --- 横表示専用コンポーネント ---
-const HorizontalView = ({ calendarDays, rooms, renderCell, currentMonth, scrollContainerRef }) => (
-    <div className="min-w-fit" key="horizontal-root">
-        <div className="flex sticky top-0 z-40 bg-white border-b">
-            <div className="w-32 p-2 bg-gray-100 border-r text-center text-sm sticky left-0 z-50">部屋</div>
-            {calendarDays.map(d => (
-                <div key={`h-header-${DateUtils.formatDate(d, 'yyyy-MM-dd')}`} id={`h-date-${DateUtils.formatDate(d, 'yyyy-MM-dd')}`} className={`flex-1 min-w-[60px] p-1 text-center border-r text-sm ${DateUtils.isSameDay(d, new Date()) ? 'bg-blue-50 font-bold' : (DateUtils.isSameMonth(d, currentMonth) ? 'bg-white' : 'bg-gray-200')}`}>
-                    {DateUtils.formatDate(d, 'd')}
-                </div>
-            ))}
-        </div>
-        {rooms.map(r => (
-            <div key={`h-row-${r}`} className="flex h-14 border-b">
-                <div className="w-32 p-2 text-sm font-medium border-r bg-white sticky left-0 z-20 flex items-center shadow-sm">{r}</div>
-                {calendarDays.map(d => (
-                    <div key={`h-cell-${r}-${DateUtils.formatDate(d, 'yyyy-MM-dd')}`} className="flex-1 min-w-[60px]">{renderCell(r, d)}</div>
-                ))}
-            </div>
-        ))}
-    </div>
-);
-
 const CalendarView = ({ reservations, rooms }) => {
-    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [currentMonth, setCurrentMonth] = useState(new Date()); 
     const [isVertical, setIsVertical] = useState(false);
-    const [isPending, setIsPending] = useState(false); // 低スペックマシン用の描画待機フラグ
     const scrollContainerRef = useRef(null);
-    const [scrollAction, setScrollAction] = useState('today');
-
-    // 切替時に一旦描画を消してブラウザの負荷を逃がす
-    const toggleOrientation = () => {
-        setIsPending(true);
-        setTimeout(() => {
-            setIsVertical(!isVertical);
-            setIsPending(false);
-            setScrollAction('today');
-        }, 50); // 50msの猶予でDOM破棄と構築を分離
-    };
+    const [scrollAction, setScrollAction] = useState('today'); 
 
     useEffect(() => {
-        if (reservations.length > 0) {
-            setCurrentMonth(DateUtils.startOfMonth(new Date()));
-            setScrollAction('today');
-        }
+        if (reservations.length > 0) { setCurrentMonth(DateUtils.startOfMonth(new Date())); setScrollAction('today'); }
     }, [reservations]);
 
     const calendarDays = useMemo(() => {
@@ -260,20 +210,23 @@ const CalendarView = ({ reservations, rooms }) => {
     }, [currentMonth]);
 
     useEffect(() => {
-        if (isPending || !scrollAction || !scrollContainerRef.current) return;
+        if (!scrollAction || !scrollContainerRef.current) return;
         const container = scrollContainerRef.current;
-        const prefix = isVertical ? 'v-' : 'h-';
-        let targetId = scrollAction === 'today' ? `${prefix}date-${DateUtils.formatDate(new Date(), 'yyyy-MM-dd')}` : null;
-        if (scrollAction === 'start') targetId = `${prefix}date-${DateUtils.formatDate(DateUtils.startOfMonth(currentMonth), 'yyyy-MM-dd')}`;
-        if (scrollAction === 'end') targetId = `${prefix}date-${DateUtils.formatDate(DateUtils.endOfMonth(currentMonth), 'yyyy-MM-dd')}`;
-
+        let targetId = scrollAction === 'today' ? `date-${DateUtils.formatDate(new Date(), 'yyyy-MM-dd')}` : null;
+        if(scrollAction === 'start') targetId = `date-${DateUtils.formatDate(DateUtils.startOfMonth(currentMonth), 'yyyy-MM-dd')}`;
+        if(scrollAction === 'end') targetId = `date-${DateUtils.formatDate(DateUtils.endOfMonth(currentMonth), 'yyyy-MM-dd')}`;
+        
         const targetEl = document.getElementById(targetId);
         if (targetEl) {
             const offset = isVertical ? targetEl.offsetTop - container.offsetTop : targetEl.offsetLeft - 128;
-            container.scrollTo({ [isVertical ? 'top' : 'left']: offset, behavior: 'auto' }); // 低スペック向けにsmoothからautoへ
+            container.scrollTo({ [isVertical?'top':'left']: offset, behavior: 'smooth' });
+        } else if (scrollAction === 'today') {
+            const startId = `date-${DateUtils.formatDate(DateUtils.startOfMonth(currentMonth), 'yyyy-MM-dd')}`;
+            const sEl = document.getElementById(startId);
+            if(sEl) container.scrollTo({ [isVertical?'top':'left']: isVertical ? sEl.offsetTop : sEl.offsetLeft - 128, behavior: 'smooth' });
         }
         setScrollAction(null);
-    }, [currentMonth, scrollAction, isVertical, isPending]);
+    }, [currentMonth, scrollAction, isVertical, calendarDays]);
 
     const availabilityMap = useMemo(() => {
         const map = {}; rooms.forEach(r => map[r] = {});
@@ -304,9 +257,9 @@ const CalendarView = ({ reservations, rooms }) => {
         const d = availabilityMap[room]?.[k];
         const isCurrent = DateUtils.isSameMonth(day, currentMonth);
         const baseClass = "h-full w-full text-[10px] p-1 border-r border-b border-gray-100 relative overflow-hidden flex flex-col justify-center";
-        const bgEmpty = isCurrent ? 'bg-white' : 'bg-gray-200'; // 明暗をはっきりさせ描画を単純化
+        const bgEmpty = isCurrent ? 'bg-white' : 'bg-gray-100';
         if (!d) return <div className={`${baseClass} ${bgEmpty}`}></div>;
-        if (d.isTurnover) return <div className={`${baseClass} border-r-gray-400`} style={{ background: 'linear-gradient(135deg, #fecaca 50%, #bbf7d0 50%)' }}><div className="text-[8px] font-bold text-red-900">OUT:{d.prevGuest || d.guest}</div><div className="text-[8px] font-bold text-green-900 text-right">IN:{d.nextGuest || d.guest}</div></div>;
+        if (d.isTurnover) return <div className={`${baseClass} border-r-gray-400`} style={{background: 'linear-gradient(135deg, #fecaca 50%, #bbf7d0 50%)'}}><div className="text-[8px] font-bold text-red-900">OUT:{d.prevGuest||d.guest}</div><div className="text-[8px] font-bold text-green-900 text-right">IN:{d.nextGuest||d.guest}</div></div>;
         if (d.type === 'start') return <div className={`${baseClass} bg-green-100 border-l-4 border-l-green-500 rounded-l`}><span className="font-bold truncate">{d.guest}</span><span className="text-[8px]">IN</span></div>;
         if (d.type === 'end') return <div className={`${baseClass} bg-red-100 border-r-4 border-r-red-400 rounded-r`}><span className="text-[8px] text-right block">OUT</span></div>;
         return <div className={`${baseClass} bg-blue-100`}><div className="w-full h-1 bg-blue-300 rounded opacity-50"></div></div>;
@@ -315,24 +268,20 @@ const CalendarView = ({ reservations, rooms }) => {
     return (
         <div className="flex flex-col h-full bg-white shadow rounded-lg overflow-hidden">
             <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-                <div className="flex gap-2">
-                    <button onClick={() => { const d = new Date(currentMonth); d.setMonth(d.getMonth() - 1); setCurrentMonth(d); setScrollAction('end') }} className="p-2 hover:bg-gray-200 rounded"><Icons.ChevronLeft /></button>
-                    <h2 className="text-lg font-bold">{DateUtils.formatDate(currentMonth, 'yyyy年 MM月')}</h2>
-                    <button onClick={() => { const d = new Date(currentMonth); d.setMonth(d.getMonth() + 1); setCurrentMonth(d); setScrollAction('start') }} className="p-2 hover:bg-gray-200 rounded"><Icons.ChevronRight /></button>
-                </div>
-                <button onClick={toggleOrientation} className="px-3 py-1 border rounded hover:bg-blue-50 text-blue-700 text-sm flex gap-1">
-                    {isVertical ? <Icons.ArrowLeftRight className="w-4 h-4" /> : <Icons.ArrowDownUp className="w-4 h-4" />}切替
-                </button>
+                <div className="flex gap-2"><button onClick={()=>{const d=new Date(currentMonth);d.setMonth(d.getMonth()-1);setCurrentMonth(d);setScrollAction('end')}} className="p-2 hover:bg-gray-200 rounded"><Icons.ChevronLeft/></button><h2 className="text-lg font-bold">{DateUtils.formatDate(currentMonth, 'yyyy年 MM月')}</h2><button onClick={()=>{const d=new Date(currentMonth);d.setMonth(d.getMonth()+1);setCurrentMonth(d);setScrollAction('start')}} className="p-2 hover:bg-gray-200 rounded"><Icons.ChevronRight/></button></div>
+                <button onClick={()=>setIsVertical(!isVertical)} className="px-3 py-1 border rounded hover:bg-blue-50 text-blue-700 text-sm flex gap-1">{isVertical?<Icons.ArrowLeftRight className="w-4 h-4"/>:<Icons.ArrowDownUp className="w-4 h-4"/>}切替</button>
             </div>
-            <div className="flex-1 overflow-auto relative bg-gray-50" ref={scrollContainerRef}>
-                {isPending ? (
-                    <div className="flex items-center justify-center h-full text-gray-400 italic">再描画中...</div>
+            <div className="flex-1 overflow-auto relative" ref={scrollContainerRef}>
+                {isVertical ? (
+                    <div className="min-w-fit">
+                        <div className="flex sticky top-0 z-40 bg-white border-b"><div className="w-20 p-2 bg-gray-100 border-r text-center text-sm sticky left-0 z-50">日付</div>{rooms.map(r=><div key={r} className="flex-1 min-w-[120px] p-2 text-sm text-center border-r bg-gray-50">{r}</div>)}</div>
+                        {calendarDays.map((d,i)=><div key={i} id={`date-${DateUtils.formatDate(d,'yyyy-MM-dd')}`} className="flex h-14 border-b"><div className={`w-20 p-1 text-center border-r sticky left-0 z-20 flex flex-col justify-center ${DateUtils.isSameDay(d,new Date())?'bg-blue-50 font-bold':(DateUtils.isSameMonth(d,currentMonth)?'bg-white':'bg-gray-200')}`}><div className="text-xs">{DateUtils.formatDate(d,'E')}</div><div>{DateUtils.formatDate(d,'M/d')}</div></div>{rooms.map(r=><div key={r} className="flex-1 min-w-[120px] border-r">{renderCell(r,d)}</div>)}</div>)}
+                    </div>
                 ) : (
-                    isVertical ? (
-                        <VerticalView key="v-view" calendarDays={calendarDays} rooms={rooms} renderCell={renderCell} currentMonth={currentMonth} />
-                    ) : (
-                        <HorizontalView key="h-view" calendarDays={calendarDays} rooms={rooms} renderCell={renderCell} currentMonth={currentMonth} />
-                    )
+                    <div className="min-w-fit">
+                        <div className="flex sticky top-0 z-40 bg-white border-b"><div className="w-32 p-2 bg-gray-100 border-r text-center text-sm sticky left-0 z-50">部屋</div>{calendarDays.map(d=><div key={DateUtils.formatDate(d,'yyyy-MM-dd')} id={`date-${DateUtils.formatDate(d,'yyyy-MM-dd')}`} className={`flex-1 min-w-[60px] p-1 text-center border-r text-sm ${DateUtils.isSameDay(d,new Date())?'bg-blue-50 font-bold':(DateUtils.isSameMonth(d,currentMonth)?'bg-white':'bg-gray-200')}`}>{DateUtils.formatDate(d,'d')}</div>)}</div>
+                        {rooms.map(r=><div key={r} className="flex h-14 border-b"><div className="w-32 p-2 text-sm font-medium border-r bg-white sticky left-0 z-20 flex items-center shadow-sm">{r}</div>{calendarDays.map(d=><div key={DateUtils.formatDate(d,'yyyy-MM-dd')} className="flex-1 min-w-[60px]">{renderCell(r,d)}</div>)}</div>)}
+                    </div>
                 )}
             </div>
         </div>
@@ -358,7 +307,6 @@ export default function App() {
     const handleLogin = () => { setIsAuthenticated(true); localStorage.setItem('calendar_auth', 'true'); };
     const handleLogout = () => { setIsAuthenticated(false); localStorage.removeItem('calendar_auth'); setData([]); };
 
-// --- App Container 内の processData 部分を修正 ---
     const processData = (rawData, timestamp) => {
         if (timestamp) setGeneratedAt(new Date(timestamp));
         const uniqueMap = new Map();
@@ -369,35 +317,28 @@ export default function App() {
             let key = (resNo && roomType) ? `${resNo}_${roomType}` : `${item['宿泊者氏名']}-${checkIn}-${roomType}`;
             uniqueMap.set(key, item);
         });
-        
         const validData = Array.from(uniqueMap.values());
         const uniqueRooms = Array.from(new Set(validData.map(r => r['部屋タイプ名称']))).filter(Boolean).sort();
         const today = DateUtils.startOfDay(new Date());
         
-        // 日付順にソートするためのヘルパー
+        // ソートヘルパー：日付順（昇順）
         const sortByDate = (a, b) => {
             const dateA = DateUtils.parseDate(a['チェックイン日']).getTime();
             const dateB = DateUtils.parseDate(b['チェックイン日']).getTime();
-            return dateA - dateB; // 昇順（近い順）
+            return dateA - dateB;
         };
 
         const active = validData.filter(r => r['予約区分'] !== 'キャンセル');
         
-        // キャンセルリスト：今日以降のものを抽出し、日付の近い順にソート
+        // 今日以降のものを抽出し、日付の近い順にソート
         const cancelled = validData
             .filter(r => r['予約区分'] === 'キャンセル' && DateUtils.parseDate(r['チェックイン日']) >= today)
             .sort(sortByDate);
-            
-        // 変更リスト：今日以降のものを抽出し、日付の近い順にソート
         const modified = validData
             .filter(r => r['予約区分'] === '変更' && DateUtils.parseDate(r['チェックイン日']) >= today)
             .sort(sortByDate);
 
-        setData(validData);
-        setRooms(uniqueRooms);
-        setActiveReservations(active);
-        setCancelledReservations(cancelled);
-        setModifiedReservations(modified);
+        setData(validData); setRooms(uniqueRooms); setActiveReservations(active); setCancelledReservations(cancelled); setModifiedReservations(modified);
     };
 
     const saveToFirebase = async (newData) => {
