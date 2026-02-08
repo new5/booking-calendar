@@ -73,27 +73,27 @@ const parseCSV = (text) => {
 };
 
 // --- Static HTML Generator ---
-const downloadStaticHtml = (activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAtDate) => {
-    const generatedAtStr = generatedAtDate ? generatedAtDate.toLocaleString() : new Date().toLocaleString();
-    const embeddedData = JSON.stringify({ activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAt: generatedAtStr });
-    const htmlContent = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reservation Calendar</title><script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script><script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><script src="https://cdn.tailwindcss.com"></script><style>body{font-family:"Helvetica Neue",Arial,sans-serif}</style></head><body class="bg-gray-50"><div id="root"></div><script id="calendar-data" type="application/json">${embeddedData}</script><script type="text/babel">
-        const { useState } = React;
-        const App = () => {
-            const data = JSON.parse(document.getElementById('calendar-data').textContent);
-            return <div className="p-8"><h1>予約カレンダー (エクスポート版)</h1><p>データ日時: {data.generatedAt}</p><p>※詳細は管理画面を確認してください</p></div>;
-        };
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-    </script></body></html>`;
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `calendar_${new Date().toISOString().slice(0,10)}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-};
+// const downloadStaticHtml = (activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAtDate) => {
+//     const generatedAtStr = generatedAtDate ? generatedAtDate.toLocaleString() : new Date().toLocaleString();
+//     const embeddedData = JSON.stringify({ activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAt: generatedAtStr });
+//     const htmlContent = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Reservation Calendar</title><script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script><script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script><script src="https://unpkg.com/@babel/standalone/babel.min.js"></script><script src="https://cdn.tailwindcss.com"></script><style>body{font-family:"Helvetica Neue",Arial,sans-serif}</style></head><body class="bg-gray-50"><div id="root"></div><script id="calendar-data" type="application/json">${embeddedData}</script><script type="text/babel">
+//         const { useState } = React;
+//         const App = () => {
+//             const data = JSON.parse(document.getElementById('calendar-data').textContent);
+//             return <div className="p-8"><h1>予約カレンダー (エクスポート版)</h1><p>データ日時: {data.generatedAt}</p><p>※詳細は管理画面を確認してください</p></div>;
+//         };
+//         ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+//     </script></body></html>`;
+//     const blob = new Blob([htmlContent], { type: 'text/html' });
+//     const url = URL.createObjectURL(blob);
+//     const link = document.createElement('a');
+//     link.href = url;
+//     link.download = `calendar_${new Date().toISOString().slice(0,10)}.html`;
+//     document.body.appendChild(link);
+//     link.click();
+//     document.body.removeChild(link);
+//     URL.revokeObjectURL(url);
+// };
 
 // --- Login Screen Component ---
 const LoginScreen = ({ onLogin }) => {
@@ -382,7 +382,7 @@ export default function App() {
                             宿泊予約管理カレンダー
                             <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">クラウド同期中</span>
                         </h1>
-                        <p className="text-sm text-gray-500">データはクラウドに保存され、全員に共有されます</p>
+                        <p className="text-sm text-gray-500">最終更新日時を確認して最新情報を確認してください</p>
                         {generatedAt && <div className="flex items-center gap-2 text-sm text-gray-500 mt-1"><Icons.Clock className="w-4 h-4" /><p>最終更新: {generatedAt.toLocaleString()}</p></div>}
                     </div>
                     <button onClick={handleLogout} className="text-sm text-gray-500 underline hover:text-red-500">ロックする</button>
@@ -395,7 +395,7 @@ export default function App() {
                         <div className="flex justify-end gap-2 flex-wrap">
                              <div className="flex items-center text-xs text-gray-400 mr-2">{isSaving ? "保存中..." : "同期済み"}</div>
                              <button onClick={() => setIsManualModalOpen(true)} className="flex items-center gap-1 text-sm text-white bg-green-600 hover:bg-green-700 px-3 py-2 rounded shadow-sm"><Icons.Plus className="w-4 h-4" />予約手動追加</button>
-                             <button onClick={() => downloadStaticHtml(activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAt)} className="flex items-center gap-1 text-sm text-white bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded shadow-sm"><Icons.Download className="w-4 h-4" />HTML出力</button>
+                             {/* <button onClick={() => downloadStaticHtml(activeReservations, cancelledReservations, modifiedReservations, rooms, generatedAt)} className="flex items-center gap-1 text-sm text-white bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded shadow-sm"><Icons.Download className="w-4 h-4" />HTML出力</button> */}
                             <button onClick={handleClearData} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 bg-white px-3 py-2 rounded border shadow-sm"><Icons.RefreshCw className="w-3 h-3" />削除</button>
                         </div>
                         <CancellationList cancellations={cancelledReservations} />
